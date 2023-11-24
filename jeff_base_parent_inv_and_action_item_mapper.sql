@@ -19,7 +19,7 @@ with parent_child_map as (
 )
 
 select dom_child_map.*
-		,sum(nr_map.net_revenue) as child_TTM_revenue
+		,sum(nr_map.net_revenue) as child_TTM_net_revenue
 from(
 	select distinct c.*
 		,d.asin as dom_child_asin
