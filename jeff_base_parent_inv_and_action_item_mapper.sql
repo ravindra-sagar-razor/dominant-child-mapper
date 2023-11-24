@@ -1,4 +1,5 @@
 drop table if exists temp_parent_dom_child_inv_and_action;
+
 create table temp_parent_dom_child_inv_and_action as
 with parent_child_map as (
     select distinct child.final_date
@@ -18,8 +19,8 @@ with parent_child_map as (
     where week_rank <= 12
 )
 
-select dom_child_map.*
-		,sum(nr_map.net_revenue) as child_TTM_net_revenue
+select g.*
+		,h.child_TTM_net_revenue
 from(
 	select distinct c.*
 		,d.asin as dom_child_asin
@@ -29,7 +30,7 @@ from(
 	left join(
 	    select b.*
 			, mapper.weighted_revenue
-			, Rank() over (partition by b.parent_asin, b.country_code, b.final_date order by mapper.weighted_revenue, mapper.asin desc) as rank
+			, Rank() over (partition by b.parent_asin, b.country_code, b.week_year order by mapper.weighted_revenue, mapper.asin desc) as rank
 	    from parent_child_map as b
 	    left join(
 	        select final_date
@@ -53,18 +54,19 @@ from(
 	) as d
 	on c.parent_asin = d.parent_asin and c.country_code = d.country_code and c.week_year = d.week_year
 	where d.rank =1	
-) as dom_child_map
-left join tech_tables.tech_asin_country_orders_marketing_data_fbmfba_final as nr_map
-on dom_child_map.asin = nr_map.asin and dom_child_map.country_code = nr_map.country_code
-where nr_map.final_date >= DATEADD(month, -12, dom_child_map.final_date) and DATEDIFF(day, nr_map.final_date, dom_child_map.final_date) >=0
-group by dom_child_map.final_date
-		, dom_child_map.week_year
-		, dom_child_map.asin
-		, dom_child_map.parent_asin
-		, dom_child_map.country_code
-		, dom_child_map.inventory_bucket
-		, dom_child_map.action_item_bucket
-		, dom_child_map.dom_child_asin
-		, dom_child_map.dom_inventory_bucket
-		, dom_child_map.dom_action_item_bucket
-order by asin, final_date, country_code
+) as g
+left join (
+	select e.asin
+			,e.country_code
+			,e.final_date
+			, sum(net_revenue) as child_TTM_net_revenue
+	from parent_child_map as e
+	left join tech_tables.tech_asin_country_orders_marketing_data_fbmfba_final as f
+	on e.asin = f.asin and e.country_code = f.country_code
+	where f.final_date >= DATEADD(month, -12, e.final_date) and DATEDIFF(day, f.final_date, e.final_date) >=0
+	group by e.asin
+			, e.country_code
+			,e.final_date
+) as h
+on g.asin = h.asin and g.final_date = h.final_date and g.country_code = h.country_code
+order by asin, parent_asin, country_code
