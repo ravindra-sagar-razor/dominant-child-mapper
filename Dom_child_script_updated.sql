@@ -29,7 +29,7 @@ with parent_child_map as (
 		, marketplace
 	from child_parent_asin_mapping) as parent 
     on child.asin = parent.child_asin and child.country_code = parent.marketplace
-    where week_rank <= 4
+    where week_rank = 1
 )
 
 , dominant_inventory_status as(
