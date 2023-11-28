@@ -1,7 +1,3 @@
-drop table if exists temp_parent_dom_child_inv_and_action_updated_tester
-
-create table temp_parent_dom_child_inv_and_action_updated_tester as
-
 with parent_child_map as (
     select distinct child.final_date
 	,child.week_year
@@ -10,15 +6,15 @@ with parent_child_map as (
 	,child.country_code
 	,child.inventory_bucket
 	, case 
-		when child.inventory_bucket = 'Healthy Stock' then 1
-		when child.inventory_bucket = 'Low Stock' then 2
-		when child.inventory_bucket = 'Overstock' then 3
+		when child.inventory_bucket = 'Overstock' then 1
+		when child.inventory_bucket = 'Healthy Stock' then 2
+		when child.inventory_bucket = 'Low Stock' then 3
 		else 4
 	end as inventory_status_heirarchy
 	,child.action_item_bucket
 	, case 
 		when child.action_item_bucket = 'Cash_in' then 1
-		when child.action_item_bucket = 'Margin %' then 2
+		when child.action_item_bucket = 'Margin ABS' then 2
 		else 3
 	end as action_item_heirarchy
     from (select a.final_date, a.week_year, a.asin, a.country_code, a.inventory_bucket, b.action_item_bucket, dense_rank() over (order by week_year desc) as week_rank from rgbit_coupon_jeff_base_v2 as a left join temp_action_item_mixed_bucket_mapping as b on a.mixed_bucket = b.mixed_bucket) as child
@@ -37,6 +33,7 @@ with parent_child_map as (
 			, country_code
 			, inventory_bucket
 			, inventory_status_rank
+			, lag_inventory_status
 			, inventory_weighted_revenue
 	from(
 		select week_year
@@ -74,11 +71,11 @@ with parent_child_map as (
 							, a.action_item_bucket
 							, a.action_item_heirarchy
 							, b.net_revenue
-							, 1 - (DATEDIFF(month, b.final_date, a.final_date)/13) AS weight
+							, 1 - round((DATEDIFF(day, b.final_date, a.final_date)/30),1) AS weight
 					from parent_child_map as a
 					left join tech_tables.tech_asin_country_orders_marketing_data_fbmfba_final as b
 					on a.asin = b.asin and a.country_code = b.country_code
-					where b.final_date >= DATEADD(month, -12, a.final_date) and DATEDIFF(day, b.final_date, a.final_date) >=0)
+					where b.final_date >= DATEADD(day, -360, a.final_date) and DATEDIFF(day, b.final_date, a.final_date) >=0)
 				group by week_year
 							, parent_asin
 							, country_code
@@ -111,11 +108,11 @@ with parent_child_map as (
 							, a.action_item_bucket
 							, a.action_item_heirarchy
 							, b.net_revenue
-							, 1 - (DATEDIFF(month, b.final_date, a.final_date)/13) AS weight
+							, 1 - cast((DATEDIFF(day, b.final_date, a.final_date)/30) as int)/12 AS weight
 					from parent_child_map as a
 					left join tech_tables.tech_asin_country_orders_marketing_data_fbmfba_final as b
 					on a.asin = b.asin and a.country_code = b.country_code
-					where b.final_date >= DATEADD(month, -12, a.final_date) and DATEDIFF(day, b.final_date, a.final_date) >=0)
+					where b.final_date >= DATEADD(day, -360, a.final_date) and DATEDIFF(day, b.final_date, a.final_date) >=0)
 				group by week_year
 							, parent_asin
 							, country_code
@@ -126,11 +123,24 @@ with parent_child_map as (
 	where dominant_action_rank = 1
 )
 
-select g.*
+select g.final_date
+		,g.week_year
+		,g.asin
+		,g.parent_asin
+		,g.country_code
+		,g.inventory_bucket
+		,g.action_item_bucket
+		,g.dominant_inventory_bucket
+		,case 
+			when is_primary_dom_inv_bucket_OOS is null then g.dominant_inventory_bucket
+			else is_primary_dom_inv_bucket_OOS
+		end
+		
 		,h.child_TTM_net_revenue
 from(
 	select c.*
 			, d.inventory_bucket as dominant_inventory_bucket
+			, d.lag_inventory_status as is_primary_dom_inv_bucket_OOS
 			, d.action_item_bucket as dominant_action_item_bucket
 	from parent_child_map as c
 	left join (
@@ -138,6 +148,7 @@ from(
 				, b.inventory_bucket
 				, b.inventory_status_rank
 				, b.inventory_weighted_revenue
+				, lag_inventory_status
 		from dominant_action_item as a
 		left join dominant_inventory_status as b
 		on a.parent_asin = b.parent_asin and a.country_code = b.country_code and a.week_year = b.week_year
