@@ -132,15 +132,14 @@ select g.final_date
 		,g.action_item_bucket
 		,g.dominant_inventory_bucket
 		,case 
-			when is_primary_dom_inv_bucket_OOS is null then g.dominant_inventory_bucket
-			else is_primary_dom_inv_bucket_OOS
-		end
-		
+			when primary_dom_inv_bucket_OOS is null then g.dominant_inventory_bucket
+			else primary_dom_inv_bucket_OOS
+		end as primary_dom_inv_bucket_OOS
 		,h.child_TTM_net_revenue
 from(
 	select c.*
 			, d.inventory_bucket as dominant_inventory_bucket
-			, d.lag_inventory_status as is_primary_dom_inv_bucket_OOS
+			, d.lag_inventory_status as primary_dom_inv_bucket_OOS
 			, d.action_item_bucket as dominant_action_item_bucket
 	from parent_child_map as c
 	left join (
