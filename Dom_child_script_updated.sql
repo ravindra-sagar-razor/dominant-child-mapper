@@ -18,18 +18,17 @@ with parent_child_map as (
 	,child.action_item_bucket
 	, case 
 		when child.action_item_bucket = 'Cash_in' then 1
-		when child.action_item_bucket = 'Velocity' then 2
-		when child.action_item_bucket = 'Margin' then 3
-		else 4
+		when child.action_item_bucket = 'Margin %' then 2
+		else 3
 	end as action_item_heirarchy
-    from (select *, dense_rank() over (order by week_year desc) as week_rank from rgbit_coupon_jeff_base_v2) as child
+    from (select a.final_date, a.week_year, a.asin, a.country_code, a.inventory_bucket, b.action_item_bucket, dense_rank() over (order by week_year desc) as week_rank from rgbit_coupon_jeff_base_v2 as a left join temp_action_item_mixed_bucket_mapping as b on a.mixed_bucket = b.mixed_bucket) as child
     left join(
 	select "child asin" as child_asin
 		, "parent asin" as parent_asin
 		, marketplace
 	from child_parent_asin_mapping) as parent 
     on child.asin = parent.child_asin and child.country_code = parent.marketplace
-    where week_rank = 1
+    where week_rank =1
 )
 
 , dominant_inventory_status as(
