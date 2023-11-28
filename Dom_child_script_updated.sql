@@ -1,3 +1,7 @@
+drop table if exists temp_parent_dom_child_inv_and_action_updated_tester as
+
+create table temp_parent_dom_child_inv_and_action_updated_tester as
+
 with parent_child_map as (
     select distinct child.final_date
 	,child.week_year
